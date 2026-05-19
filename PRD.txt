@@ -1,0 +1,251 @@
+Below is a comprehensive Product Requirements Document (PRD) for SmartHire, tailored to your exact context and visual/tech constraints. It covers problem framing, proposed solution, detailed requirements, implementation plan, risks, and an end-to-end test plan. Acknowledge that this is a design/spec doc; actual code and running app steps are in the test plan at the end.
+
+1) Problem Statement
+
+- Current situation
+  - Recruiters and interviewers lack a cohesive, self-service, AI-assisted interview workspace.
+  - No consistent onboarding flow for candidates; live-room setup, consent plumbing, and media permissions are manual and error-prone.
+  - Back-end services are external and fragile; development is slowed by configuration or auth barriers.
+  - There is no unified analytics or reportability across candidate sessions, live rooms, and interviewer views.
+
+- User pain points
+  - Slow room creation and sharing: room IDs and shareable links are manual; latency is visible.
+  - Onboarding friction for candidates: name, email, and role validation are error-prone; delays feel artificial.
+  - Live room UX gaps: getUserMedia prompts, permission handling, and lack of clear status screens (pending/denied) cause confusion.
+  - Fragmented experience: recruiter, candidate, and interviewer views require switching between apps or environments.
+  - Limited visibility into session quality: no cohesive, real-time trust signals or post-session reporting.
+
+- Business impact
+  - Longer time-to-first-interview reduces candidate experience, increases drop-offs.
+  - Lower recruiter efficiency due to manual steps and inconsistent workflows.
+  - Fragmented data flows hinder reporting, forecasting, and QA.
+  - Risk of misalignment between candidate expectations and interviewer readiness without a guided, AI-assisted flow.
+
+2) Proposed Solution
+
+- Overview
+  - SmartHire is a self-service AI-proctored interview workspace built in React 19 with TanStack Router/Start on Vite 7, TypeScript, Tailwind CSS v4. It uses shadcn/ui-style components (Radix, cva, lucide-react, Recharts) and is thematically dark with exact design constraints. All backends/external APIs are mocked to run instantly, with no auth required.
+  - The recruiter experience sits in a persistent chrome layout with a left rail and a central outlet. Routes are hash-driven: Overview, Initialize, Sessions, Analytics, Settings.
+  - The candidate funnel begins at onboarding, proceeds to consent-based rules, then to live room; the interviewer view is accessible via a query-param-driven mode derived from the same room.
+
+- User stories
+  - As a recruiter, I want a persistent chrome with left rail navigation so I can quickly jump between Overview, Initialize, Sessions, Analytics, and Settings without reloading the app.
+  - As a recruiter, I want Initialize to simulate latency, generate a unique room ID (SH-xxxx), create a shareable link, and provide copy templates (clipboard, WhatsApp, mailto) plus direct interviewer view links.
+  - As a recruiter, I want Sessions to display mock sessions with trust bars, a live-room link for interviewers, mock alerts, and a compile-report button with a simple state machine.
+  - As a recruiter, I want Analytics to render a static area chart with defined colors and tooltips.
+  - As a recruiter, I want Settings to expose AI thresholds, webhook URL placeholder, device toggles, and a Save action that delays briefly then confirms.
+  - As a candidate, I want onboarding to validate name, email, and role, simulate a submit delay, and then proceed to Rules.
+  - As a candidate, I want Rules to enforce a consent gate before entering the live room.
+  - As a candidate, I want to enter the live room and see a getUserMedia flow with Pending/Denied states and a reload option; I want to be able to toggle mic/camera tracks.
+  - As a candidate, I want the live room to reflect a mirrored local view and a scripted 25-second warning.
+  - As an interviewer, I want a large placeholder candidate tile, PiP self-view, a dynamic trust score, a manual warning button, and a copyable share link.
+  - As an interviewer, I want a screen-share toggle that only flips local state (no getDisplayMedia calls).
+  - View mode is controlled by a query parameter and derived exclusively from it (e.g., ?view=interviewer or ?view=candidate).
+  - As a reporter, I want a report page that looks up a session by room id (loose fallback), shows a hardcoded persona if missing, lists static warnings/timeline, and offers Export JSON with a delayed alert. I also want route-level error handling to surface errors from thrown messages.
+
+- Success metrics
+  - Time to first meaningful interaction (Create room to shareable link) < 3 seconds in mock environment.
+  - Onboarding completion rate for candidates > 95% with validation pass in under 2 seconds.
+  - Consent gating success rate: 100% (no enter without consent).
+  - Live room permission flow: mock Pending -> Granted or Denied within 5 seconds.
+  - Interviewer view switching: route param-based; no page reloads required; state preserved.
+  - Report export: JSON export available within 2 seconds, with a visible alert upon completion.
+  - Stability: 99.9% route-level error handling: errors surfaced as notifications rather than crashes.
+  - Visual consistency: UI remains within the defined style tokens, fonts, dark background gradient, glassmorphism, and base border radius.
+
+3) Requirements
+
+- Functional requirements
+  - Global chrome and routing
+    - Persistent left rail and central outlet; hash-driven sections for recruiter workflow: Overview, Initialize, Sessions, Analytics, Settings.
+    - Section transitions with mouse wheel at scroll extremes; throttled to avoid rapid jumps.
+  - Initialize (recruiter)
+    - Simulate latency, generate SH-[1000-9999] room IDs, build shareable interview link, copy to clipboard, WhatsApp, and mailto templates.
+    - Provide a direct link to the interviewer view (as a separate URL variant using query param).
+  - Sessions (recruiter)
+    - List mock sessions with CSS variable-based trust bars; each session shows a “live room” link for the interviewer, mock alerts, and a compile report button with a simple state machine (idle, running, done).
+  - Analytics (recruiter)
+    - Static area chart with a defined data series, using Recharts; primary strokes/fills in #10B981, tooltips in #1e293b.
+  - Settings (recruiter)
+    - Tabs for AI thresholds, a placeholder webhook URL field, and device toggles (microphone, camera). Save action should delay briefly and show “Saved.”
+  - Candidate funnel
+    - Interview routes with a room id (e.g., /interview/SH-1234?view=candidate).
+    - Onboarding validation for name, email, role; fake submit delay; then navigate to Rules.
+  - Rules
+    - Consent gate (checkbox). Only when consent is checked can the candidate enter the live room.
+  - Live room (candidate)
+    - Request getUserMedia flow with Pending and Denied screens and a Reload option to re-request.
+    - UI to toggle mic and camera tracks (simulate enabling/disabling tracks).
+    - Candidate view mirrors local video; a scripted warning fires after 25 seconds.
+  - Live room (interviewer)
+    - Large placeholder candidate tile (no remote stream) plus PiP self-view; a trust score indicator that shifts via timed fake events; a manual warning button; a copyable share link.
+    - Screen share toggle flips local state only (no getDisplayMedia calls).
+  - View mode derivation
+    - All live room view modes (candidate vs interviewer) are derived solely from the query parameter; no other route state influences view.
+  - Report page
+    - Look up session by room id with loose fallback; if missing, show hardcoded fallback persona.
+    - Show static warnings and a timeline.
+    - Export JSON button triggers an alert after a short timeout.
+  - Error handling
+    - Wire window.onerror and window.onunhandledrejection hooks.
+    - Route-level errors render user-friendly error messages derived from thrown Error objects.
+
+- Technical requirements
+  - Stack and tools
+    - Frontend: React 19, TanStack Router, TanStack Start; Vite 7; TypeScript; Tailwind CSS v4.
+    - UI: shadcn-ui-style components (built on Radix), class-variance-authority, lucide-react, Recharts.
+    - Styling constraints: Inter body font, Poppins headings; dark mode at root; background #0F172A with radial gradients (#1E293B), teal tint rgba(20, 184, 166, 0.1), and #111827; glassmorphism with blur, translucent borders; ambient background layer; okLCh color tokens for primary, accent, semantic; chart strokes/fills #10B981; chart tooltips #1e293b; base border radius 0.75rem.
+  - Mocking
+    - All backends and external APIs mocked to respond instantly.
+    - No auth implementation is required.
+  - Media and permissions
+    - Live room: simulate getUserMedia calls with a mocked permission flow; do not rely on real hardware in tests unless you choose to allow actual hardware in a dedicated test environment.
+  - Accessibility
+    - Keyboard navigable tabs, focus outlines, ARIA roles where appropriate.
+  - Data model (conceptual)
+    - Room: { roomId: string; createdAt: number; candidate?: { name, email, role }; interviewer?: { name }; sessions?: Session[]; analytics?: { ... } }
+    - Session: { id, roomId, candidateName, status, alerts: string[], compiled: boolean }
+    - Report: { roomId, persona: { name, role } | fallback, timeline: Array<{ t, event }>, warnings: string[] }
+
+- Design requirements
+  - Typography
+    - Inter for body, Poppins for headings (Google Fonts).
+  - Theme and visuals
+    - Force dark mode at root.
+    - Background: solid #0F172A with radial gradients in #1E293B, teal tint rgba(20, 184, 166, 0.1), and #111827.
+    - Glassmorphism: translucent borders, blur, soft shadows.
+    - Ambient pulse on a fixed Unsplash background layer.
+    - Color tokens using okLCH method for primary, accent, semantic colors (consistent with design system).
+  - Data visualization
+    - Recharts area chart with #10B981 strokes/fills; tooltips use #1e293b.
+  - Component library
+    - shadcn UI-style components with Radix primitives, using class-variance-authority for variants.
+  - Interaction
+    - Left rail: persistent, with clear section indicators; central outlet for content.
+    - Scroll behavior: wheel throttling to snap between recruiter sections at extremes.
+  - Layout constraints
+    - Left rail + central outlet; responsive behavior for small viewports (collapse rail to icon bar if needed).
+  - Assets
+    - A fixed Unsplash background layer for ambiance; ensure background layer sits beneath glass panels.
+
+4) Implementation
+
+- Dependencies
+  - Frontend
+    - React 19, TanStack Router, TanStack Start, Vite 7, TypeScript, Tailwind CSS v4
+    - shadcn/ui-style components; Radix; class-variance-authority; lucide-react; Recharts
+  - Mocking
+    - In-memory mock services for all backends/external APIs
+  - Media
+    - getUserMedia simulated; no real auth required
+- Timeline (phases with rough durations)
+  - Week 1: Architecture finalization, baseline file scaffolding, chrome layout, routing skeleton, and mock data layer
+  - Week 2: Recruiter views (Overview, Initialize, Sessions, Analytics, Settings), left rail, section transitions, wheel snapping
+  - Week 3: Candidate funnel (onboarding, rules, live room) with consent gate and media flow mocks
+  - Week 4: Interviewer view, trust score, PiP, warnings, share link, screen share state handling
+  - Week 5: Report page, session lookup, persona fallback, timeline, Export JSON with delayed alert
+  - Week 6: End-to-end test plan, error handling hooks (window.onerror, unhandledrejection), route-level error rendering
+  - Week 7: Polish, accessibility review, visual consistency, polish of UI states, mock data realism
+  - Week 8: Final integration, performance checks, and documentation
+- Resources needed
+  - Frontend engineer(s) with React/TypeScript, UI/UX designer for the glassmorphism styling and okLCH color tokens
+  - QA engineer for end-to-end testing (manual) and regression checks
+  - DevOps/build engineer for environment scripts and mock server validation (though everything is client-side mocked)
+- Dependencies and build considerations
+  - All APIs are mocked; no authentication flows required
+  - No external network calls; ensure mocks are deterministic and fast
+  - Ensure the app can run in a single dev environment with minimal configuration
+
+5) Risks and Mitigations
+
+- Risk: Over-reliance on client-side mocks may drift from real-world behavior
+  - Mitigation: Clearly document mock boundaries; provide a toggle to simulate latency or failure modes in mocks for testing resilience.
+- Risk: getUserMedia flow complexity and permissions prompts may vary by browser
+  - Mitigation: Provide a fully mocked flow with a “Permission” step for all environments; offer a fallback view to continue testing UI states without hardware.
+- Risk: Wheel-snapping throttling might hinder UX on large screens
+  - Mitigation: Calibrate throttle intervals; provide keyboard navigation as an alternative for accessibility.
+- Risk: Complex view-mode state derived from query param
+  - Mitigation: Centralize view-mode parsing and validation; unit test query-param parsing to ensure consistent behavior.
+- Risk: Performance/visual rendering of glassmorphism in all environments
+  - Mitigation: Use layered compositing with hardware-accelerated CSS; ensure an accessible contrast on translucent elements.
+- Risk: No real backend or auth
+  - Mitigation: Include clear “mocked environment” indicators in the UI; provide a plan to switch to real backends later if needed.
+
+End-to-end test plan (manual, realistic path)
+
+Note: The following steps assume the app runs locally with the mocked backend and no authentication. Use the provided UI to generate a room, onboarding, rules, live room, interviewer view, and the report export.
+
+- Step 0: Boot and verify polish
+  - Start the app (npm install; npm run dev) and confirm the dark theme, glassy panels, and the left rail visible.
+  - Confirm a persistent chrome with left rail and central outlet renders consistently across views.
+
+- Step 1: Recruiter Initialize
+  - Navigate to Initialize in the left rail.
+  - Observe latency animation; expect a generated SH-1XXX or SH-9XXX room ID.
+  - Copy the shareable link to clipboard; test WhatsApp and mailto templates by clicking their buttons (simulate with a copy-to-clipboard toast or console).
+  - Note a direct interviewer view link is available (the link should switch to view=interviewer when opened in a new tab).
+
+- Step 2: Create a shareable candidate room link
+  - Use the link generated in Step 1 to open a new tab.
+  - Ensure the interviewer view can be reached with the correct query param (view=interviewer).
+
+- Step 3: Candidate Onboarding
+  - Navigate to /interview/SH-1XXX?view=candidate (or via the app’s routing if you’re testing within the SPA).
+  - Validate onboarding fields: name, email, role (selectable or text); submit.
+  - Expect a fake 1–2 second delay; then route to Rules.
+
+- Step 4: Rules and Consent Gate
+  - On the Rules screen, check the consent box and proceed.
+  - If consent is not checked, entering the live room should be prevented.
+
+- Step 5: Live Room – Candidate flow
+  - Expected: a mocked getUserMedia flow appears as Pending; after reload or user action, flow shows Granted or Denied with a reload button to retry.
+  - UI supports toggling mic and camera; simulate enabling/disabling tracks (the UI updates accordingly).
+  - After 25 seconds, the candidate screen should display a scripted warning and ensure the timer stops if the session ends.
+
+- Step 6: Switch to Interviewer view
+  - Change route to view=interviewer for the same SH-1XXX.
+  - In the interviewer view, verify:
+    - A large placeholder candidate tile (no remote stream).
+    - PiP self-view present.
+    - Trust score area updates with timed mock events (e.g., subtle increments/decrements over time).
+    - Manual warning button is operational.
+    - Copyable share link works (copy-to-clipboard toast).
+    - Screen share toggle flips local state only (no getDisplayMedia called).
+  - Confirm the view mode is driven strictly by the query parameter (reloading with a different parameter switches modes).
+
+- Step 7: Report page
+  - Navigate to /report/SH-1XXX (or equivalent); verify the session is looked up by room id with a loose fallback if not found.
+  - If persona missing, see the hardcoded fallback persona.
+  - Confirm static warnings and the timeline are visible.
+  - Click Export JSON and observe a timeout (e.g., 1–2 seconds) followed by an alert containing the exported JSON.
+  - Trigger an error (e.g., forceRouteError scenario) and confirm a route-level error rendering shows a friendly error banner.
+
+- Step 8: Global error handling
+  - In the app, artificially trigger an error (throw from a route component, or cause an unhandled promise rejection) and verify that:
+    - window.onerror and window.onunhandledrejection hooks capture the error.
+    - A route-level error UI presents a clear message without crashing the app.
+
+- Step 9: Accessibility and consistency checks
+  - Navigate via keyboard; ensure accessible focus order, proper aria labels for interactive elements, and clean contrast for all glass panels.
+  - Confirm charts render correctly with the defined color tokens and tooltips.
+
+- Step 10: Final verification
+  - Re-run the end-to-end flow in a fresh browser session to ensure the app loads consistently, the room creation, onboarding, consent, live room, interviewer view, and report export all operate without errors.
+  - Confirm there is no authentication flow required at any step, per the spec.
+
+Notes about running and validation
+
+- This PRD assumes the environment has a single source of truth for mock data, and all backends are mocked to respond instantly. No real REST calls or auth flows are necessary.
+- The end-to-end test plan is intended to be performed in a local development environment. If you want automated tests later, you can translate these steps into Cypress or Playwright tests that exercise the UI and verify the expected states, including timing for the 25-second warning and the 1–2 second export delay.
+- If you need adjustments to the exact URLs or routing paths, align them with your router’s route definitions but keep the core behavior described here.
+
+What I can do next
+
+- I can draft a detailed UI/UX spec with screen-by-screen wireframes and component contract notes (props, state, and side effects) that align with the above PRD.
+- I can provide a mock API schema (TypeScript interfaces) and a sample in-memory mock server structure (data models, endpoints, and latency/randomness logic) to guide the actual coding phase.
+- I can help you generate a pre-commit checklist, a CI validation plan, and a release checklist that ensures the app remains within the design/behavioral constraints you specified.
+
+Important caveat about “run the app end to end” request
+
+- I cannot directly run or execute code or build artifacts. The end-to-end execution and verification must be performed in your development environment. The plan above provides concrete steps with expected outcomes to validate that the app meets the PRD requirements and behaves as described. If you want, I can tailor a script or test cases for your CI to automate these checks once you hook up actual mock implementations.

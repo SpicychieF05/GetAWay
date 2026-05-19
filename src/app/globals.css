@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-poppins);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  /* Enforce dark mode at root per PRD */
+  color-scheme: dark;
+  --background: oklch(0.2 0.02 260);
+  /* Deep slate/blue */
+  --foreground: oklch(0.98 0.01 260);
+  /* Off-white */
+
+  --card: oklch(0.25 0.02 260);
+  --card-foreground: oklch(0.98 0.01 260);
+
+  --popover: oklch(0.2 0.02 260);
+  --popover-foreground: oklch(0.98 0.01 260);
+
+  --primary: oklch(0.7 0.15 160);
+  /* Teal #10B981 equivalent */
+  --primary-foreground: oklch(0.98 0.01 260);
+
+  --secondary: oklch(0.3 0.03 260);
+  --secondary-foreground: oklch(0.98 0.01 260);
+
+  --muted: oklch(0.28 0.03 260);
+  --muted-foreground: oklch(0.7 0.02 260);
+
+  --accent: oklch(0.7 0.15 160);
+  --accent-foreground: oklch(0.98 0.01 260);
+
+  --destructive: oklch(0.6 0.2 25);
+  /* Red */
+  --destructive-foreground: oklch(0.98 0.01 260);
+
+  --border: oklch(0.4 0.03 260);
+  --input: oklch(0.3 0.03 260);
+  --ring: oklch(0.7 0.15 160);
+  /* Teal focus ring */
+
+  --chart-1: oklch(0.7 0.15 160);
+  /* #10B981 */
+  --chart-2: oklch(0.6 0.1 200);
+  --chart-3: oklch(0.5 0.1 240);
+  --chart-4: oklch(0.4 0.1 280);
+  --chart-5: oklch(0.3 0.1 320);
+
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-inter), sans-serif;
+    /* PRD: Solid #0F172A with radial gradients in #1E293B, teal tint rgba(20, 184, 166, 0.1), and #111827 */
+    background:
+      radial-gradient(circle at top right, rgba(20, 184, 166, 0.1) 0%, transparent 40%),
+      radial-gradient(circle at bottom left, #1e293b 0%, transparent 50%),
+      #0f172a;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-poppins), sans-serif;
+  }
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  @apply bg-card backdrop-blur-md border border-border shadow-lg rounded-xl;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel-hover {
+  @apply transition-all duration-300 hover:bg-card/60 hover:shadow-xl hover:border-primary/50;
+}
+
+/* Ambient pulse for the background */
+@keyframes ambient-pulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+}
+
+.ambient-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070&auto=format&fit=crop');
+  /* Placeholder ambient bg */
+  background-size: cover;
+  background-position: center;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  animation: ambient-pulse 15s ease-in-out infinite;
+}

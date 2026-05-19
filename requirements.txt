@@ -1,0 +1,43 @@
+# System Requirements
+Node.js (>= 20.x recommended)
+npm (>= 10.x recommended)
+
+# Core Dependencies
+next (16.2.6)
+react (19.2.4)
+react-dom (19.2.4)
+
+# UI & Styling
+@base-ui/react (^1.5.0)
+class-variance-authority (^0.7.1)
+clsx (^2.1.1)
+lucide-react (^1.16.0)
+next-themes (^0.4.6)
+recharts (^3.8.1)
+shadcn (^4.7.0)
+sonner (^2.0.7)
+tailwind-merge (^3.6.0)
+tailwindcss-animate (^1.0.7)
+tw-animate-css (^1.4.0)
+
+# State Management
+zustand (^5.0.13)
+
+# Development Dependencies
+@tailwindcss/postcss (^4)
+@types/node (^20)
+@types/react (^19)
+@types/react-dom (^19)
+eslint (^9)
+eslint-config-next (16.2.6)
+tailwindcss (^4)
+typescript (^5)
+
+# ---------------------------------------------------------
+# NOTE: This is a Next.js (Node.js) project, not a Python project.
+# Standard Python `pip install -r requirements.txt` will NOT work.
+#
+# To install the requirements and run the project, please use:
+#   1. npm install
+#   2. npm run dev
+# ---------------------------------------------------------
