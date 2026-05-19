@@ -2,16 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
-  experimental: {
-    appDir: true,
-  },
   // Produce a standalone output which can be helpful for deployments
   output: "standalone",
-  // Prevent lint errors from failing production builds on Vercel
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   // Add long-term caching headers for common static asset types
   async headers() {
     return [
