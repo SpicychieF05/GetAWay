@@ -1,11 +1,11 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { AlertSchema } from "@/lib/schemas";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/api";
 
 type Params = { params: Promise<{ roomId: string }> };
 
-// POST /api/rooms/[roomId]/alerts — issue a warning
+// POST /api/rooms/[roomId]/alerts â€” issue a warning
 export async function POST(request: NextRequest, { params }: Params) {
   const { roomId } = await params;
   const body = await request.json();
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   return apiSuccess({ id: ref.id, ...alert }, 201);
 }
 
-// GET /api/rooms/[roomId]/alerts — get all alerts
+// GET /api/rooms/[roomId]/alerts â€” get all alerts
 export async function GET(_request: NextRequest, { params }: Params) {
   const { roomId } = await params;
 
@@ -36,7 +36,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     .orderBy("createdAt", "asc")
     .get();
 
-  const alerts = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const alerts = snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 
   return apiSuccess({ alerts });
 }

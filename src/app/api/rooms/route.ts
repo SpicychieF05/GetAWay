@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { adminDb, adminAuth } from "@/lib/firebase/admin";
 import { apiSuccess, apiError, apiValidationError, verifyAuthToken } from "@/lib/api";
 import { z } from "zod";
@@ -9,7 +9,7 @@ function generateRoomId(): string {
   return `GW-${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
-// POST /api/rooms — create a new room
+// POST /api/rooms â€” create a new room
 export async function POST(request: NextRequest) {
   const auth = await verifyAuthToken(request);
   if (!auth) return apiError("Unauthorized", 401);
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   return apiSuccess({ roomId, room }, 201);
 }
 
-// GET /api/rooms — list all rooms for the logged-in recruiter
+// GET /api/rooms â€” list all rooms for the logged-in recruiter
 export async function GET(request: NextRequest) {
   const auth = await verifyAuthToken(request);
   if (!auth) return apiError("Unauthorized", 401);
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     .orderBy("createdAt", "desc")
     .get();
 
-  const rooms = snapshot.docs.map((doc) => doc.data());
+  const rooms = snapshot.docs.map((doc: any) => doc.data());
 
   return apiSuccess({ rooms });
 }

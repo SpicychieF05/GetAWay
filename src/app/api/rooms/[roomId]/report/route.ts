@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { apiSuccess, apiError } from "@/lib/api";
 
@@ -26,15 +26,15 @@ export async function POST(_request: NextRequest, { params }: Params) {
     .orderBy("createdAt", "asc")
     .get();
 
-  const trustLogs = trustSnap.docs.map((d) => d.data());
-  const alerts = alertsSnap.docs.map((d) => d.data());
+  const trustLogs = trustSnap.docs.map((d: any) => d.data());
+  const alerts = alertsSnap.docs.map((d: any) => d.data());
 
   const finalScore = trustLogs.at(-1)?.score ?? 100;
 
   // Build timeline: merge trust and alert events by time
   const timeline: { t: string; event: string; type: string }[] = [
     { t: roomData.session?.startedAt ?? roomData.createdAt, event: "Candidate joined the room", type: "info" },
-    ...alerts.map((a) => ({
+    ...alerts.map((a: any) => ({
       t: a.createdAt,
       event: a.message,
       type: "warning",
@@ -63,7 +63,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
   return apiSuccess({ report });
 }
 
-// GET /api/rooms/[roomId]/report — fetch compiled report
+// GET /api/rooms/[roomId]/report â€” fetch compiled report
 export async function GET(_request: NextRequest, { params }: Params) {
   const { roomId } = await params;
 
