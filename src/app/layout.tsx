@@ -27,7 +27,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} ${poppins.variable} antialiased`}>
+      <body
+        className={`${inter.variable} ${poppins.variable} antialiased`}
+        suppressHydrationWarning
+      >
         <div className="ambient-layer"></div>
         <GlobalErrorCatcher />
         {children}
