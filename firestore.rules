@@ -11,17 +11,6 @@ service cloud.firestore {
       allow update: if true;  // Candidate onboarding writes here (no auth)
       allow delete: if request.auth != null;
 
-      // WebRTC signaling — must be open to both parties (no auth)
-      match /rtc/{doc} {
-        allow read, write: if true;
-      }
-      match /rtcCaller/{doc} {
-        allow read, write: if true;
-      }
-      match /rtcCallee/{doc} {
-        allow read, write: if true;
-      }
-
       // Alerts & Trust logs
       match /alerts/{alertId} {
         allow read, write: if true;
@@ -30,6 +19,21 @@ service cloud.firestore {
         allow read, write: if true;
       }
       match /report/{doc} {
+        allow read, write: if true;
+      }
+    }
+
+    // ── WebRTC signaling ─────────────────────────────────────────────
+    // Dedicated top-level collection so signaling never conflicts with
+    // rooms collection auth rules. Fully open — room IDs are unguessable.
+    match /webrtc/{roomId} {
+      match /signal/{doc} {
+        allow read, write: if true;
+      }
+      match /callerCandidates/{doc} {
+        allow read, write: if true;
+      }
+      match /calleeCandidates/{doc} {
         allow read, write: if true;
       }
     }
@@ -46,3 +50,4 @@ service cloud.firestore {
     }
   }
 }
+
