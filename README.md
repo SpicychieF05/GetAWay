@@ -1,6 +1,8 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GetAWay - Travel Planning Platform
 
-## Getting Started
+**GetAWay** is an intelligent travel planning platform designed to simplify and enhance the travel experience through AI-powered suggestions and seamless itinerary management.
+
+## 🚀 Getting Started
 
 First, run the development server:
 
