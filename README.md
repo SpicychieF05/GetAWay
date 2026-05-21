@@ -197,17 +197,18 @@ Our roadmap expands GetAWay's AI capabilities to provide even deeper behavioral 
 * **Calendar Integration:** Connect with Google Calendar and Outlook to automatically schedule follow-up reviews when a candidate's integrity score drops below acceptable thresholds.
 * **Advanced Multi-Voice Diarization:** Implement server-side audio chunk analysis to accurately detect multiple distinct speakers during the interview.
 
-## Contributing
+## Developers
 
-We welcome contributions to GetAWay. Follow this workflow to propose changes:
+* **Chirantan Mallick** — BCA Student (2023-2026)
+  * Email: [mallickchirantan@gmail.com](mailto:mallickchirantan@gmail.com)
+  * LinkedIn: [Chirantan Mallick](https://www.linkedin.com/in/c-mallick/)
 
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/your-feature-name`).
-3. Commit your changes (`git commit -m "Add your feature"`).
-4. Push to the branch (`git push origin feature/your-feature-name`).
-5. Open a Pull Request on GitHub.
+* **Sahin Sultan** — BCA Student (2023-2026)
+  * Email: [sahinsultan095@gmail.com](mailto:sahinsultan095@gmail.com)
+  * LinkedIn: [Sahin Sultan](https://linkedin.com/in/sahin-sultan-917b50331)
 
-Before contributing, please review our `AGENTS.md` file for strict project rules regarding Next.js patterns, Tailwind usage, and testing conventions.
+* **Sobhan Maity** — Project Supervisor (Assistant Prof, Seacom Skills University)
+  * LinkedIn: [Sobhan Maity](https://www.linkedin.com/in/sobhan-maity-4175381b8/)
 
 ## Acknowledgements
 
