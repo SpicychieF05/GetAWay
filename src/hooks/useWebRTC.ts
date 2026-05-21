@@ -59,9 +59,15 @@ export function useWebRTC(roomId: string, role: Role) {
 
   useEffect(() => {
     let cancelled = false;
+    const pendingCandidates: RTCIceCandidateInit[] = [];
 
     const start = async () => {
       try {
+        if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
+          setConnectionState("failed");
+          return;
+        }
+
         setConnectionState("requesting-media");
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
@@ -75,7 +81,31 @@ export function useWebRTC(roomId: string, role: Role) {
         const remote = new MediaStream();
         setRemoteStream(remote);
 
-        pc.ontrack = (e) => e.streams[0].getTracks().forEach((t) => remote.addTrack(t));
+        const flushPendingCandidates = async () => {
+          while (pendingCandidates.length) {
+            const candidate = pendingCandidates.shift();
+            if (candidate) {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+          }
+        };
+
+        const addIceCandidateSafely = async (candidate: RTCIceCandidateInit) => {
+          if (pc.currentRemoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } else {
+            pendingCandidates.push(candidate);
+          }
+        };
+
+        pc.ontrack = (e) => {
+          const [firstStream] = e.streams;
+          if (firstStream) {
+            firstStream.getTracks().forEach((t) => remote.addTrack(t));
+          } else if (e.track) {
+            remote.addTrack(e.track);
+          }
+        };
         pc.onconnectionstatechange = () => {
           if (pc.connectionState === "connected") setConnectionState("connected");
           if (["failed", "disconnected"].includes(pc.connectionState)) setConnectionState("failed");
@@ -105,12 +135,13 @@ export function useWebRTC(roomId: string, role: Role) {
             const data = snap.data();
             if (!pc.currentRemoteDescription && data?.answer) {
               await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+              await flushPendingCandidates();
             }
           });
           const unsubCallee = onSnapshot(calleeRef, (snap) => {
             snap.docChanges().forEach(async (ch) => {
               if (ch.type === "added") {
-                await pc.addIceCandidate(new RTCIceCandidate(ch.doc.data()));
+                await addIceCandidateSafely(ch.doc.data());
               }
             });
           });
@@ -131,11 +162,12 @@ export function useWebRTC(roomId: string, role: Role) {
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             await updateDoc(signalRef, { answer: { sdp: answer.sdp, type: answer.type } });
+            await flushPendingCandidates();
           });
           const unsubCaller = onSnapshot(callerRef, (snap) => {
             snap.docChanges().forEach(async (ch) => {
               if (ch.type === "added") {
-                await pc.addIceCandidate(new RTCIceCandidate(ch.doc.data()));
+                await addIceCandidateSafely(ch.doc.data());
               }
             });
           });
