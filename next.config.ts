@@ -4,11 +4,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Produce a standalone output which can be helpful for deployments
   output: "standalone",
-  // Add long-term caching headers for common static asset types
+  // Cache static image/font assets long-term; JS/CSS chunks are handled by
+  // Next.js's built-in content-hash cache-busting — do NOT set immutable on them
+  // or browsers will cache stale module graphs across deploys.
   async headers() {
     return [
       {
-        source: "/:path*\\.(js|css|png|jpg|jpeg|gif|svg|webp|avif)",
+        source: "/:path*\\.(png|jpg|jpeg|gif|svg|webp|avif|woff|woff2)",
         headers: [
           {
             key: "Cache-Control",

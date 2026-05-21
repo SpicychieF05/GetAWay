@@ -65,6 +65,9 @@ export function LiveRoomStep({ roomId }: { roomId: string }) {
     );
   }
 
+  // Show remote stream as soon as it has tracks (don't gate on "connected" label)
+  const hasRemoteVideo = remoteStream && remoteStream.getTracks().length > 0;
+
   /* ── Live room ── */
   return (
     <div className="w-full h-[calc(100vh-2rem)] max-w-6xl mx-auto glass-panel border-white/10 overflow-hidden flex flex-col relative animate-in fade-in zoom-in-95 duration-500 shadow-2xl">
@@ -96,8 +99,8 @@ export function LiveRoomStep({ roomId }: { roomId: string }) {
       {/* Main Video Area */}
       <div className="flex-1 bg-black/60 relative overflow-hidden flex items-center justify-center">
 
-        {/* Remote stream (interviewer) — fills the room */}
-        {remoteStream && connectionState === "connected" ? (
+        {/* Remote stream (interviewer) — show as soon as tracks arrive */}
+        {hasRemoteVideo ? (
           <VideoElement
             stream={remoteStream}
             className="w-full h-full object-cover"

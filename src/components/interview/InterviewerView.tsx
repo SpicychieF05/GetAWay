@@ -33,6 +33,7 @@ export function InterviewerView({ roomId }: { roomId: string }) {
     toggleMic,
     toggleCam,
     hangup,
+    cleanupSignal,
   } = useWebRTC(roomId, "interviewer");
 
   const [screenShare, setScreenShare] = useState(false);
@@ -63,8 +64,9 @@ export function InterviewerView({ roomId }: { roomId: string }) {
     toast.success("Interviewer link copied.");
   };
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
     hangup();
+    await cleanupSignal();
     toast("Leaving room...");
     setTimeout(() => router.push("/recruiter/sessions"), 1000);
   };
@@ -126,8 +128,8 @@ export function InterviewerView({ roomId }: { roomId: string }) {
 
         {/* Main Video Area */}
         <div className="flex-1 bg-black/60 relative overflow-hidden">
-          {/* Candidate video — fills area */}
-          {remoteStream && connectionState === "connected" ? (
+          {/* Candidate video — show as soon as remote tracks arrive */}
+          {remoteStream && remoteStream.getTracks().length > 0 ? (
             <VideoElement
               stream={remoteStream}
               className="w-full h-full object-cover"
