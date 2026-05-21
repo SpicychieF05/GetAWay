@@ -1,0 +1,347 @@
+This document is an addendum to PRD.txt. It covers only the AI Proctoring feature set for SmartHire (GetAWay). It does not alter or replace any existing requirements. All existing flows, views, and behaviors described in PRD.txt remain unchanged.
+
+1) Problem Statement
+
+- Current situation
+  - The existing live room provides a trust score that shifts via timed mock events, and a manual "Issue Warning" button for the interviewer. There is no automated, real-time intelligence analyzing the candidate's environment, behavior, audio, or video feed.
+  - The post-session report shows a static, hardcoded timeline and two hardcoded warnings with no link to actual session events.
+  - The settings page exposes a single AI threshold slider with no ability to configure per-feature sensitivity or provide an AI API key for model-backed analysis.
+  - The analytics page shows session volume only, with no visibility into the nature or frequency of integrity violations.
+
+- User pain points
+  - Interviewers must manually watch for cheating signals; fatigue and distraction mean violations go undetected.
+  - Recruiters reviewing reports have no trustworthy AI-generated event log; all current entries are hardcoded placeholders.
+  - No mechanism exists to detect: a second person entering frame, the candidate looking away, poor or missing lighting, muted or absent camera/mic, scratchy or multi-voice audio.
+  - No per-organization AI configuration; all thresholds are global and coarse.
+
+- Business impact
+  - Undetected integrity violations reduce the reliability of remote interviews and candidate trust scores.
+  - Without a real AI event log, post-session reports are not useful for dispute resolution or audit.
+  - Competitors offering automated proctoring will be preferred by enterprise recruiters.
+  - A configurable AI key allows organizations to bring their own model, reducing vendor lock-in.
+
+2) Proposed Solution
+
+- Overview
+  - The AI Proctoring layer runs entirely in the candidate's browser using MediaPipe (face detection, face mesh, pose detection) and the Web Audio API (audio analysis). No GPU server or separate inference service is required for Phase 1 and 2. Phase 3 optionally uses a recruiter-supplied AI API key (e.g. Google Gemini, OpenAI) forwarded through a Next.js API route for advanced multi-voice diarization.
+  - A new hook, useProctorEngine, orchestrates all detection modules and emits typed ProctoringEvent objects. These events are written to Firestore under rooms/{roomId}/proctor_events/{eventId} so the interviewer sees them in real time.
+  - The interviewer live room gains a collapsible right-side AI Proctor Panel displaying live events as they arrive.
+  - The candidate live room gains a new Pre-flight Check step (between Rules and the live room) that validates face detected, lighting OK, mic active, and camera active before allowing entry.
+  - The report page gains a new AI Proctor Summary section with a full timestamped event log, categorized violation counts, and an AI Integrity Score computed from the event stream.
+  - The settings page gains a new AI Proctoring tab with per-feature toggles, sensitivity sliders, and an optional AI API key field.
+  - The analytics page gains two new charts: Violation Type Breakdown (bar chart) and Avg Integrity Score Over Time (area chart).
+
+- User stories
+  - As an interviewer, I want a real-time AI Proctor Panel on the right side of the live room so I can see violations as they are detected without manually watching every frame.
+  - As an interviewer, I want each violation in the panel to show the time, violation type, severity badge, and a brief description so I can quickly assess risk.
+  - As an interviewer, I want the trust score to be driven by real AI events (each violation reduces the score by its configured severity weight) rather than random drift.
+  - As an interviewer, I want to be able to collapse the AI Proctor Panel to maximize the video area when I do not need it.
+  - As a candidate, I want a Pre-flight Check step before entering the live room that confirms my camera, microphone, face visibility, and lighting are all acceptable so I am not rejected mid-session for a preventable issue.
+  - As a candidate, I want clear pass/fail indicators for each pre-flight check item and a Retry button if something fails.
+  - As a recruiter, I want the post-session report to include a full AI Proctor Summary with every detected event timestamped (e.g. 10:23 AM — Candidate looking away from screen repeatedly) so I can audit the session.
+  - As a recruiter, I want the AI Proctor Summary to show categorized violation counts (face, gaze, audio, lighting, person count) and an overall AI Integrity Score.
+  - As a recruiter, I want the Settings page to have a dedicated AI Proctoring tab where I can toggle each detection feature on or off and set per-feature sensitivity thresholds.
+  - As a recruiter, I want to be able to enter my own AI API key (e.g. Gemini API key) in settings so that advanced features such as multi-voice diarization use my organization's quota. By default no key is required; basic features work without one.
+  - As a recruiter, I want the Analytics page to show a Violation Type Breakdown chart and an Avg Integrity Score Over Time chart so I can spot patterns across sessions.
+
+- Success metrics
+  - Pre-flight check completion rate: 100% of candidates pass through the pre-flight step before entering the live room.
+  - Face detection latency: first detection result within 2 seconds of camera stream being available.
+  - Event write latency: proctoring events appear in the interviewer panel within 1 second of detection on the candidate side.
+  - False positive rate (target): face-not-detected alerts do not fire when face is clearly visible; lighting alerts do not fire in normal office conditions.
+  - Report accuracy: every ProctoringEvent written to Firestore during the session appears in the report timeline.
+  - Settings save: AI API key and per-feature config persist across page reloads via Zustand persist middleware.
+  - Analytics chart render: violation breakdown and integrity score charts render within 2 seconds of page load.
+
+3) Requirements
+
+- Functional requirements
+
+  - Pre-flight Check step (candidate)
+    - New step inserted in CandidateFlow between RulesStep and LiveRoomStep.
+    - Runs four sequential checks: Camera Active, Microphone Active, Face Detected, Lighting Adequate.
+    - Each check displays a spinner while running, a green checkmark on pass, and a red X on fail with a plain-English reason.
+    - A Retry button re-runs all failed checks.
+    - The Enter Interview button is enabled only when all four checks pass.
+    - Pre-flight uses the same getUserMedia stream that will be handed to useWebRTC, so no double permission prompt occurs.
+
+  - useProctorEngine hook (candidate browser)
+    - Accepts: videoRef (HTMLVideoElement), audioStream (MediaStream), roomId (string), enabled flags and thresholds from settings.
+    - Returns: currentAlerts (ProctoringEvent[]), integrityScore (number 0-100).
+    - Internally orchestrates:
+      - Face/person detector: MediaPipe Face Detector at 2 FPS. Emits FACE_NOT_DETECTED if no face for configurable grace period (default 3 s). Emits MULTIPLE_PERSONS if face count > 1.
+      - Gaze tracker: MediaPipe Face Mesh iris landmarks. Emits GAZE_AWAY if gaze vector deviates from screen center beyond threshold for configurable duration (default 5 s).
+      - Lighting checker: Canvas getImageData brightness histogram at 1 FPS. Emits POOR_LIGHTING if average luminance below configurable threshold (default 60/255).
+      - Audio quality monitor: Web Audio API AnalyserNode. Emits MIC_SILENT if RMS energy below threshold for 5 s. Emits AUDIO_QUALITY_POOR if high-frequency noise ratio exceeds threshold.
+      - Multi-voice detector (optional, requires AI API key): Sends 10-second audio chunks to POST /api/proctor/analyze-audio. Server forwards to configured AI provider. Emits MULTIPLE_VOICES if diarization returns speaker count > 1.
+    - All emitted events are written to Firestore rooms/{roomId}/proctor_events as ProctoringEvent documents.
+    - Integrity score starts at 100. Each violation type reduces the score by its configured severity weight (configurable in settings, defaults below).
+
+  - ProctoringEvent data model
+    - id: string (auto Firestore doc ID)
+    - roomId: string
+    - type: "FACE_NOT_DETECTED" | "MULTIPLE_PERSONS" | "GAZE_AWAY" | "POOR_LIGHTING" | "MIC_SILENT" | "AUDIO_QUALITY_POOR" | "MULTIPLE_VOICES" | "CAMERA_OFF" | "MIC_OFF"
+    - severity: "info" | "warning" | "critical"
+    - timestamp: Firestore Timestamp
+    - wallTime: string (human-readable, e.g. "10:23 AM")
+    - description: string (human-readable, e.g. "Candidate looking away from screen repeatedly")
+    - meta: object (optional, e.g. { faceCount: 2, luminance: 45 })
+
+  - AI Proctor Panel (interviewer live room)
+    - Collapsible right-side panel inside the existing InterviewerView layout.
+    - Panel width: 280px when expanded, collapses to a 40px icon rail showing only unread count badge.
+    - Toggle button: Shield icon in the top bar, right of the existing Share Room button.
+    - Panel header: "AI Proctor" label, live event count badge, Clear button.
+    - Panel body: scrollable list of ProctoringEvent cards. Each card shows:
+      - Colored left border (info=muted, warning=yellow, critical=destructive).
+      - Violation type icon + short label.
+      - wallTime timestamp.
+      - description text.
+      - Severity badge.
+    - New events animate in from the top (slide-down, fade-in).
+    - Panel listens to Firestore rooms/{roomId}/proctor_events via onSnapshot in real time.
+    - Trust score in the top bar is now computed from integrityScore derived from the live event stream, not from random drift. The existing getTrustColor thresholds (>80 primary, >60 yellow, else destructive) remain.
+    - The existing manual "Issue Warning" button remains and still reduces the score by 15 and fires a toast.
+
+  - Report page: AI Proctor Summary section
+    - New section added below the existing Timeline card on the report page.
+    - Reads all ProctoringEvent documents from Firestore rooms/{roomId}/proctor_events, ordered by timestamp ascending.
+    - Sub-section 1 — AI Integrity Score card: large score display, color-coded (same thresholds as trust score), explanation text, computed as: 100 minus sum of severity weights for all events.
+    - Sub-section 2 — Violation Summary card: grid of badges, one per violation type, showing count. Types with zero violations shown as muted.
+    - Sub-section 3 — Full AI Event Log card: complete chronological list. Each entry: wallTime, violation type icon, description. Warning and critical entries highlighted. Title: "AI Proctor Event Log — Generated automatically during session".
+    - Export JSON button already on the page now also includes the full proctoring events array in the exported payload.
+    - If no proctor events exist (session pre-AI or proctoring was disabled), show a placeholder card: "No AI proctoring data recorded for this session."
+
+  - Settings page: AI Proctoring tab
+    - New tab added to the Settings page alongside the existing System Configuration content, labeled "AI Proctoring".
+    - Section: Master Toggle — single switch "Enable AI Proctoring". When off, all detection is disabled and the pre-flight check is skipped.
+    - Section: Detection Modules — per-feature toggle switches:
+      - Face Detection (default on)
+      - Person Count Monitoring (default on)
+      - Gaze Tracking (default on)
+      - Lighting Check (default on)
+      - Audio Quality Monitor (default on)
+      - Multi-Voice Detection (default off, requires AI API key)
+    - Section: Sensitivity Thresholds — sliders (min/max/step shown):
+      - Face Grace Period: 1–10 s, default 3 s
+      - Gaze Deviation Tolerance: 1–15 s, default 5 s
+      - Lighting Threshold: 20–120 luminance units, default 60
+      - Audio Silence Threshold: 1–10 s, default 5 s
+    - Section: Severity Weights (score deduction per event) — number inputs:
+      - FACE_NOT_DETECTED: default 10
+      - MULTIPLE_PERSONS: default 20
+      - GAZE_AWAY: default 8
+      - POOR_LIGHTING: default 5
+      - MIC_SILENT: default 5
+      - AUDIO_QUALITY_POOR: default 5
+      - MULTIPLE_VOICES: default 20
+    - Section: AI API Key — labeled "AI Provider API Key (optional)":
+      - Password-type input field. Placeholder: "Paste your Gemini / OpenAI key here".
+      - Helper text: "Required only for Multi-Voice Detection. Leave blank to use basic client-side analysis. Your key is stored locally and never logged."
+      - Key is stored in Zustand persist store, never sent to any third party except the configured AI provider endpoint.
+    - Save Changes button (same behavior as existing: 800 ms delay, toast confirmation).
+
+  - Analytics page: AI metrics
+    - New sub-section "AI Proctoring Insights" added below the existing Session Volume chart.
+    - Card 1 — Violation Type Breakdown: Recharts BarChart. X-axis: violation type labels (abbreviated). Y-axis: count. Bar fill #EF4444 (destructive) for critical, #EAB308 (yellow) for warning, #6B7280 (muted) for info. Tooltip shows full type name and count. Data sourced from all proctor_events across all rooms.
+    - Card 2 — Avg Integrity Score Over Time: Recharts AreaChart. Same visual style as existing Session Volume chart (#10B981 stroke/fill). X-axis: date. Y-axis: 0–100. One data point per session (avg integrity score). Tooltip shows roomId and score.
+    - If no proctoring data exists, both cards show a placeholder state: "No AI proctoring data yet. Complete an interview with AI Proctoring enabled."
+
+  - API route: POST /api/proctor/analyze-audio (Phase 3, AI API key required)
+    - Accepts: multipart/form-data with audioChunk (Blob, max 10 s), roomId (string).
+    - Reads AI API key from settings store server-side (or from request header x-ai-api-key).
+    - Forwards audio to configured provider (Gemini / OpenAI Whisper + diarization).
+    - Returns: { speakerCount: number, confidence: number }.
+    - If no API key configured, returns 501 Not Implemented with message "AI API key not configured. Multi-Voice Detection is disabled."
+    - Errors are logged server-side; client degrades gracefully (no MULTIPLE_VOICES events emitted).
+
+  - Firestore schema additions
+    - Collection: rooms/{roomId}/proctor_events
+      - Documents: ProctoringEvent (schema defined above in data model section).
+    - No changes to existing rooms, sessions, or reports collections.
+    - Firestore security rules must allow: candidate write to own room's proctor_events, interviewer read from same room's proctor_events. Unauthenticated access follows existing room rules pattern.
+
+- Technical requirements
+
+  - New dependencies
+    - @mediapipe/tasks-vision (Face Detector, Face Landmarker) — loaded via CDN WASM bundle, tree-shaken via dynamic import to avoid increasing initial bundle size.
+    - No new server-side ML dependencies required for Phase 1 and 2.
+    - Phase 3 only: standard fetch calls to Gemini or OpenAI REST APIs from the existing Next.js API route layer.
+
+  - Performance constraints
+    - MediaPipe inference runs on a Web Worker or requestAnimationFrame loop capped at 2 FPS to avoid blocking the main thread and degrading WebRTC quality.
+    - Canvas frame capture for lighting analysis runs at 1 FPS.
+    - Web Audio AnalyserNode sampling runs at 4 Hz (every 250 ms).
+    - Total CPU overhead target on candidate device: < 15% additional load above WebRTC baseline.
+
+  - Graceful degradation
+    - If MediaPipe WASM fails to load (network error, old browser), the pre-flight check marks AI features as "Unavailable" with a warning, and the candidate may still enter the room. No blocking.
+    - If Firestore write fails for a proctoring event, the event is queued in memory and retried once. Subsequent failures are silently dropped to avoid blocking the interview.
+    - If AI API key is absent or invalid, multi-voice detection is silently disabled; all other features function normally.
+
+  - State model additions (mockStore.ts / Zustand)
+    - settings object gains new fields:
+      - aiProctoringEnabled: boolean (default true)
+      - aiModules: { faceDetection, personCount, gazeTracking, lightingCheck, audioQuality, multiVoice }: all boolean
+      - aiThresholds: { faceGracePeriod, gazeTolerance, lightingLevel, audioSilence }: numbers
+      - aiWeights: { FACE_NOT_DETECTED, MULTIPLE_PERSONS, GAZE_AWAY, POOR_LIGHTING, MIC_SILENT, AUDIO_QUALITY_POOR, MULTIPLE_VOICES }: numbers
+      - aiApiKey: string (default "")
+    - Room model gains optional field:
+      - proctorEvents: ProctoringEvent[] — for in-memory fallback if Firestore is unavailable.
+
+  - New files and folders (proposed structure)
+    - src/hooks/useProctorEngine.ts — main orchestration hook
+    - src/hooks/useProctorVision.ts — MediaPipe face/gaze/person detection
+    - src/hooks/useProctorAudio.ts — Web Audio quality and silence detection
+    - src/components/interview/PreflightCheck.tsx — new candidate pre-flight step
+    - src/components/interview/ProctoringPanel.tsx — collapsible right panel for interviewer
+    - src/components/interview/ProctoringEventCard.tsx — single event row component
+    - src/components/recruiter/ViolationBreakdownChart.tsx — bar chart for analytics
+    - src/components/recruiter/IntegrityScoreChart.tsx — area chart for analytics
+    - src/app/api/proctor/analyze-audio/route.ts — Phase 3 server route
+    - src/lib/proctor.ts — shared types (ProctoringEvent, ProctoringEventType, severity maps)
+
+  - Accessibility
+    - AI Proctor Panel toggle button has aria-label="Toggle AI Proctor Panel" and aria-expanded state.
+    - Each ProctoringEventCard has role="listitem" and aria-label combining wallTime and description.
+    - Pre-flight check items have role="status" and aria-live="polite" for screen reader updates.
+
+- Design requirements
+  - All new UI follows the existing dark glassmorphism design: glass-panel class, border-white/10, bg-card/40, Inter body, Poppins headings.
+  - AI Proctor Panel uses a subtle teal left border (border-l-primary/40) to distinguish it from general content.
+  - ProctoringEventCard left border colors: info=#6B7280, warning=#EAB308, critical=#EF4444.
+  - Severity badges use existing Badge component with variant="secondary" and custom class overrides for color.
+  - Pre-flight check pass state: lucide CheckCircle2 in text-primary (teal). Fail state: XCircle in text-destructive. Pending: Loader2 animate-spin.
+  - AI Integrity Score on report page uses the same color thresholds as the trust score: >80 text-primary (teal), >60 text-yellow-500, <=60 text-destructive.
+  - New settings tab uses the same Card + CardContent + Label + Switch + Slider + Input pattern as the existing settings cards.
+  - New analytics charts use the same Recharts patterns: #10B981 for integrity score area, custom fills for violation bar chart, #1e293b tooltip background.
+
+4) Implementation
+
+- New dependencies to install
+  - npm install @mediapipe/tasks-vision
+  - No other new runtime packages required for Phase 1 and 2.
+  - Phase 3: no install needed; uses native fetch against external AI REST APIs.
+
+- Timeline (phases with rough durations)
+  - Phase 1 — Foundation (Week 1-2):
+    - Add ProctoringEvent type to src/lib/proctor.ts.
+    - Extend Zustand store with new AI settings fields.
+    - Add AI Proctoring tab to Settings page with all toggles, sliders, weights, and AI API key field.
+    - Write Firestore security rules for proctor_events sub-collection.
+  - Phase 2 — Candidate-side detection (Week 3-4):
+    - Implement useProctorAudio (Web Audio: silence, quality).
+    - Implement useProctorVision (MediaPipe: face count, face presence, gaze).
+    - Implement useProctorEngine orchestrating both, writing events to Firestore.
+    - Implement PreflightCheck component; insert into CandidateFlow between RulesStep and LiveRoomStep.
+    - Wire useProctorEngine into LiveRoomStep (candidate side).
+  - Phase 3 — Interviewer panel and report (Week 5-6):
+    - Implement ProctoringEventCard and ProctoringPanel components.
+    - Integrate ProctoringPanel into InterviewerView as right-side collapsible panel.
+    - Replace random trust score drift in InterviewerView with event-driven integrityScore from Firestore listener.
+    - Add AI Proctor Summary section to report page (Integrity Score card, Violation Summary card, Full Event Log card).
+    - Include proctoring events in Export JSON payload.
+  - Phase 4 — Analytics and advanced audio (Week 7):
+    - Implement ViolationBreakdownChart and IntegrityScoreChart components.
+    - Add AI Proctoring Insights sub-section to Analytics page.
+    - Implement POST /api/proctor/analyze-audio route for multi-voice detection (Phase 3 AI feature).
+    - Wire multi-voice detection into useProctorAudio when API key is present.
+  - Phase 5 — Polish and hardening (Week 8):
+    - Graceful degradation for WASM load failures, Firestore write failures, missing API key.
+    - Performance profiling: ensure < 15% CPU overhead on candidate device.
+    - Accessibility audit of all new components.
+    - End-to-end test plan execution.
+
+- Resources needed
+  - Frontend engineer: React/TypeScript, MediaPipe, Web Audio API, Recharts.
+  - QA: manual testing of detection accuracy, false positive rates, graceful degradation.
+  - No additional backend or DevOps resources required beyond existing Vercel + Firebase setup.
+
+5) Risks and Mitigations
+
+- Risk: MediaPipe WASM bundle increases initial load time significantly.
+  - Mitigation: Load MediaPipe via dynamic import only when the candidate enters the pre-flight check step. Use Next.js dynamic() with ssr:false. Bundle is cached after first load.
+
+- Risk: Face detection causes CPU spike that degrades WebRTC video quality.
+  - Mitigation: Cap detection at 2 FPS. Run inference inside requestIdleCallback when available. Provide toggle to disable vision detection if candidate device is low-powered.
+
+- Risk: High false positive rate for gaze detection (glasses, head tilt, ambient light changes).
+  - Mitigation: Configurable tolerance window (default 5 s). Log events as "warning" not "critical". Interviewers are trained to treat them as signals, not proof. Grace period prevents single-frame triggers.
+
+- Risk: Audio quality detection fires on legitimate accent variations or background room noise.
+  - Mitigation: Use RMS energy thresholds with a moving average over 2 s. Audio quality alerts are always "info" severity. Provide sensitivity slider in settings.
+
+- Risk: Firestore write volume from proctoring events increases costs.
+  - Mitigation: Debounce repeated identical events (e.g. same violation type within 30 s writes only one event). Batch writes where possible. Estimated max: 20 events per 45-minute session = negligible on free tier.
+
+- Risk: AI API key stored in Zustand persist (localStorage) is visible to browser extensions.
+  - Mitigation: Document this risk in settings UI helper text. Advise users to use a restricted-scope API key. Phase 3 advanced option: accept the key only as a server-side environment variable instead.
+
+- Risk: Multi-voice detection latency (10 s audio chunk + API round-trip) makes alerts too slow.
+  - Mitigation: This feature is asynchronous and non-blocking. Alert arrives up to 15 s after the event, which is acceptable for a post-hoc flag rather than a real-time warning. UI marks multi-voice alerts with a "Delayed detection" note.
+
+End-to-end test plan (manual, addendum to PRD.txt test plan)
+
+Note: Execute after completing all steps in the original PRD.txt test plan. These steps assume AI Proctoring is enabled in settings and a room has been created.
+
+- Step A: Settings — AI Proctoring tab
+  - Navigate to Settings; confirm new "AI Proctoring" tab is present alongside existing content.
+  - Toggle "Enable AI Proctoring" off; verify a banner appears in candidate live room and pre-flight check is skipped.
+  - Toggle back on. Set Face Grace Period to 2 s. Save; confirm toast "Settings saved successfully."
+  - Enter an AI API key placeholder value; save; confirm key persists on page reload (stored in localStorage via Zustand persist).
+
+- Step B: Pre-flight Check (candidate)
+  - Navigate to /interview/SH-XXXX?view=candidate through onboarding and rules.
+  - Confirm the pre-flight check screen appears before the live room.
+  - Verify all four checks run: Camera Active, Microphone Active, Face Detected, Lighting Adequate.
+  - Block camera in browser settings; confirm Camera Active shows red X and Retry button.
+  - Restore camera; click Retry; confirm all checks pass and Enter Interview button becomes active.
+
+- Step C: Live room — AI detection running (candidate side)
+  - Enter the live room as candidate.
+  - Cover the camera briefly (> 3 s grace period); confirm FACE_NOT_DETECTED event is written to Firestore.
+  - Look away from the screen for > 5 s; confirm GAZE_AWAY event is written.
+  - Mute the microphone for > 5 s; confirm MIC_SILENT event is written.
+
+- Step D: Interviewer panel — real-time events
+  - Open the same room as interviewer (/interview/SH-XXXX?view=interviewer).
+  - Confirm the Shield icon button is visible in the top bar to the right of "Share Room."
+  - Click it to expand the AI Proctor Panel on the right side.
+  - Trigger events on the candidate side (Step C); confirm events appear in the panel within 1 second with correct wallTime, description, and severity badge color.
+  - Click the toggle again; confirm panel collapses to 40px icon rail with event count badge.
+  - Confirm trust score in top bar now decreases in response to events (not random drift).
+
+- Step E: Report — AI Proctor Summary
+  - End the session. Navigate to /report/SH-XXXX.
+  - Confirm the new "AI Proctor Summary" section appears below the existing timeline.
+  - Verify AI Integrity Score card shows a score reflecting the events triggered in Step C.
+  - Verify Violation Summary card shows correct counts per violation type.
+  - Verify Full AI Event Log lists all events with correct wallTime and description strings.
+  - Click Export JSON; confirm downloaded JSON includes a "proctorEvents" array with all events.
+
+- Step F: Analytics — AI metrics
+  - Navigate to recruiter Analytics page.
+  - Confirm "AI Proctoring Insights" sub-section is visible below Session Volume chart.
+  - Verify Violation Type Breakdown bar chart shows bars for the event types triggered in Step C.
+  - Verify Avg Integrity Score Over Time area chart shows a data point for the completed session.
+
+- Step G: Graceful degradation
+  - Disable network access to the MediaPipe CDN (DevTools offline or block URL).
+  - Enter candidate pre-flight check; confirm AI checks show "Unavailable — AI detection could not load" warning but Enter Interview button remains accessible.
+  - Confirm interview proceeds without crashing; no proctoring events are emitted.
+  - Restore network; confirm subsequent session loads MediaPipe and detection resumes.
+
+Notes about running and validation
+
+- Phase 1 and 2 features (face detection, gaze, lighting, audio quality) require no AI API key and no external service beyond the existing Firebase project.
+- Phase 3 (multi-voice detection) requires a valid Gemini or OpenAI API key entered in Settings. Without a key, the feature is silently disabled and all other features continue normally.
+- MediaPipe models are loaded from the Google CDN at runtime. Internet access is required on the candidate's device for the first load; subsequent loads are served from browser cache.
+- All Firestore writes from the candidate browser use the existing Firebase client SDK configured in src/lib/firebase/client.ts. No new Firebase configuration is required.
+- The AI API key is stored in localStorage via Zustand persist under the existing key "getaway-mock-storage". It is never sent to any server other than the AI provider's official endpoint via the /api/proctor/analyze-audio route.
+
+What can be built next
+
+- A real-time video screenshot capture on critical events (MULTIPLE_PERSONS, FACE_NOT_DETECTED) stored as base64 in the ProctoringEvent meta field and displayed as thumbnails in the report.
+- A candidate-facing ambient alert (subtle border pulse) when a violation is detected, prompting self-correction without interrupting the interview.
+- A post-session AI narrative summary: a paragraph generated by the AI provider describing the overall candidate behavior, sent to the recruiter's report page.
+- Integration with calendar tools (Google Calendar, Outlook) to auto-schedule follow-up reviews when the AI Integrity Score falls below the configured warning threshold.
