@@ -1,3 +1,0 @@
-This document is an addendum to PRD.txt. It covers only the AI Proctoring feature set for SmartHire (GetAWay).
-It does not alter or replace any existing requirements. 
-All existing flows, views, and behaviors described in PRD.txt remain unchanged.
